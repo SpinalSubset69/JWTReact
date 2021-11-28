@@ -31,16 +31,19 @@ namespace API
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            //CORS
+            services.AddCors();
+
             //Add UnitOfWork in each HTTP REQUEST
             services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             //Add AutoMapper MappinProfiles
             services.AddAutoMapper(typeof(MappingProfiles));
-
+            services.AddScoped<JWTService>();
             services.AddControllers();
             services.AddDbContext<UserContext>(options =>
             {
-                options.UseSqlServer(Configuration.GetConnectionString("devConection"));
+                options.UseSqlServer(Configuration.GetConnectionString("laptopConnection"));
             });
         }
 
@@ -55,6 +58,16 @@ namespace API
             app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseCors(options =>
+            {
+                //Options we need to add the Cookies
+                options
+                //.WithOrigins(new [] {"localhost:3000"})
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+            });
 
             app.UseAuthorization();
 

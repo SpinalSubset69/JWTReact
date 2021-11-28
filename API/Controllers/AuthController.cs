@@ -5,41 +5,66 @@ using AutoMapper;
 using Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Threading.Tasks;
 
 namespace API.Controllers
 {
-    [Route("{controller}")]
+    [Route("[controller]")]
     [ApiController]
     public class AuthController : Controller
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
         private readonly IConfiguration _config;
+        private readonly JWTService _jwtService;
 
-        public AuthController(IUnitOfWork unitOfWork, IMapper mapper, IConfiguration config)
+        public AuthController(IUnitOfWork unitOfWork, IMapper mapper, IConfiguration config, JWTService jwtService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _config = config;
+            _jwtService = jwtService;
         }
 
         [HttpPost]
         public async Task<IActionResult> Register([FromBody]RegisterDto registerDto)
         {
-            var user = _mapper.Map<RegisterDto, User>(registerDto);
-            user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
-            var userSaved = await _unitOfWork.User.SaveAndGetUser(user);
-            return Created("success", userSaved); 
+            try
+            {
+                var user = _mapper.Map<RegisterDto, User>(registerDto);
+                user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
+                var userSaved = await _unitOfWork.User.SaveAndGetUser(user);
+                var userToSend = _mapper.Map<User, UserDto>(userSaved);
+                return Created("success", userToSend);
+            }
+            catch(Exception ex)
+            {
+                return Ok(new { message = "Error", error = ex.Message });
+            }            
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById([FromRoute] int? id)
+        [HttpGet]
+        public async Task<IActionResult> GetUseryByToken()
         {
-            var user = await _unitOfWork.User.FindByIdAsync(x => x.Id == id);
-            var securityKey = _config.GetSection("Cryptography").GetSection("SecurityKey").Value;
-            //var decrypted = user.Password = BCrypt.Net.BCrypt.Verify(user.Password, "Resumiendo69%");
-            return Ok();
+            try
+            {
+                //First wee need to get the cookie
+                var jwt = Request.Cookies["jwt"];
+                var token = _jwtService.VerifyJWT(jwt, _config.GetSection("Cryptography").GetSection("SecurityKey").Value);
+                var userFromDb = await _unitOfWork.User.FindAsync(x => x.Id == Convert.ToInt32(token.Issuer));
+
+                var userToSend = _mapper.Map<User, UserDto>(userFromDb);
+                return Ok(new
+                {
+                    mesage = "Success",
+                    data = userToSend
+                });
+            }
+            catch(Exception ex)
+            {
+                return Unauthorized();
+            }
         }
 
         [HttpPost("login")]
@@ -59,7 +84,27 @@ namespace API.Controllers
 
             var userToSend = _mapper.Map<User, UserDto>(user);
 
-            return Ok(userToSend);
+            //GeneratesJWT
+            var jwt = _jwtService.GenerateJWT(user.Id, _config.GetSection("Cryptography").GetSection("SecurityKey").Value);
+
+            //Append Cooki to the response, httponly = can acces to the cookie
+            Response.Cookies.Append("jwt", jwt, new Microsoft.AspNetCore.Http.CookieOptions { HttpOnly = true});
+
+            return Ok(new
+            {
+                message = "Success",                               
+            });
+        }
+
+        [HttpPost("logout")]
+        public IActionResult LogOut()
+        {
+            Response.Cookies.Delete("jwt");
+
+            return Ok(new
+            {
+                message = "Success"
+            });
         }
     }
 }

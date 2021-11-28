@@ -11,6 +11,6 @@ namespace Core.Interfaces
     public interface IRepository<T> where T : BaseEntity
     {
         void Create(T entity);
-        Task<T> FindByIdAsync(Expression<Func<T, bool>> criteria);
+        Task<T> FindAsync(Expression<Func<T, bool>> criteria);
     }
 }

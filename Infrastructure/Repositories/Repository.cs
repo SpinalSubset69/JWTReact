@@ -25,7 +25,7 @@ namespace Infrastructure.Repositories
             _dbSet.Add(entity); 
         }
 
-        public async Task<T> FindByIdAsync(Expression<Func<T, bool>> criteria)
+        public async Task<T> FindAsync(Expression<Func<T, bool>> criteria)
         {
             IQueryable<T> query = _dbSet;
             query = query.Where(criteria);
